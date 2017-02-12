@@ -16,7 +16,7 @@ repobasepath="$(get-repo-base-path)"
 # Get the repo to be acted upon
 if [ -z "$*" ]; then
 	# Use the current repo
-	repopath="$(pwd)"
+	repopath="$(readlink -f "$(pwd)")"
 else
 	# Get the specified repo
 	repopath="$(readlink -f "$repobasepath/$*")"

@@ -1,12 +1,18 @@
 #!/bin/bash
 
+# Check to see if not being sourced
+if [[ $0 == "$BASH_SOURCE" ]]; then
+	echo "This script shoud be sourced to actually set the GOPATH" 1>&2
+	echo "Running it in a sub-shell like this means it has no effect" 1>&2
+fi
+
 # The repo base path
 repobasepath=$(get-repo-base-path)
 
 # Get the repo to be acted upon
 if [ -z "$*" ]; then
 	# Use the current repo
-	provisionalgopath="$(pwd)"
+	provisionalgopath="$(readlink -f "$(pwd)")"
 else
 	# Get the specified repo
 	provisionalgopath="$(readlink -f "$gobasepath/$*")"
@@ -17,23 +23,36 @@ provisionalgopath="$(echo "$provisionalgopath/src/" | sed 's:/src/.*::')"
 if [[ "$provisionalgopath" == "." ]]; then
 	echo "'$*' does not appear to be within a usable gopath" 1>&2
 	unset repobasepath provisionalgopath
-	return 1
+	if [[ $0 != "$BASH_SOURCE" ]]; then
+		return 1
+	fi
+	exit 1
 fi
 
 # Check that the destination directory exists and contains an src directory
 if [ ! -d "$provisionalgopath/src" ]; then
 	echo "'$provisionalgopath/src' must exist for it to be used as a go path" 1>&2
 	unset repobasepath provisionalgopath
-	return 1
+	if [[ $0 != "$BASH_SOURCE" ]]; then 
+		return 1
+	fi
+	exit 1
 fi
 
 # Check that the destination is inside the repos base path
 if [[ "$provisionalgopath" != "${repobasepath}/"* ]]; then
 	echo "'${provisionalgopath}' is not within '${repobasepath}'; unable to proceed" 1>&2
 	unset repobasepath provisionalgopath
-	return 1
+	if [[ $0 != "$BASH_SOURCE" ]]; then 
+		return 1
+	fi
+	exit 1
 fi
 
-export GOPATH="$provisionalgopath"
-echo "GOPATH is now $provisionalgopath" 1>&2
+if [[ $0 == "$BASH_SOURCE" ]]; then
+	echo "GOPATH would have been set to $provisionalgopath" 1>&2
+else
+	export GOPATH="$provisionalgopath"
+	echo "GOPATH is now $provisionalgopath" 1>&2
+fi
 unset repobasepath provisionalgopath
