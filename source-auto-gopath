@@ -1,0 +1,39 @@
+#!/bin/bash
+
+# The repo base path
+repobasepath=$(get-repo-base-path)
+
+# Get the repo to be acted upon
+if [ -z "$*" ]; then
+	# Use the current repo
+	provisionalgopath="$(pwd)"
+else
+	# Get the specified repo
+	provisionalgopath="$(readlink -f "$gobasepath/$*")"
+fi
+
+# Try and find the outer go workspace
+provisionalgopath="$(echo "$provisionalgopath/src/" | sed 's:/src/.*::')"
+if [[ "$provisionalgopath" == "." ]]; then
+	echo "'$*' does not appear to be within a usable gopath" 1>&2
+	unset repobasepath provisionalgopath
+	return 1
+fi
+
+# Check that the destination directory exists and contains an src directory
+if [ ! -d "$provisionalgopath/src" ]; then
+	echo "'$provisionalgopath/src' must exist for it to be used as a go path" 1>&2
+	unset repobasepath provisionalgopath
+	return 1
+fi
+
+# Check that the destination is inside the repos base path
+if [[ "$provisionalgopath" != "${repobasepath}/"* ]]; then
+	echo "'${provisionalgopath}' is not within '${repobasepath}'; unable to proceed" 1>&2
+	unset repobasepath provisionalgopath
+	return 1
+fi
+
+export GOPATH="$provisionalgopath"
+echo "GOPATH is now $provisionalgopath" 1>&2
+unset repobasepath provisionalgopath

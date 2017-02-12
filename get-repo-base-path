@@ -1,0 +1,3 @@
+#!/bin/bash
+
+echo "$(readlink -f "$(dirname "$0")/..")"

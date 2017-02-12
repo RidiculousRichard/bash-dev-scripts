@@ -1,0 +1,45 @@
+#!/bin/bash
+
+set -ef -o pipefail
+
+# Check the enviroment variables are set
+if [ -z "$GITHUB_USERNAME" ] || [ -z "$GITHUB_EMAIL" ]; then
+	echo "This script requires the following environment variables to be set" 1>&2
+	echo " * GITHUB_USERNAME" 1>&2
+	echo " * GITHUB_EMAIL" 1>&2
+	exit 1
+fi 
+
+# The repos base path
+repobasepath="$(get-repo-base-path)"
+
+# Get the repo to be acted upon
+if [ -z "$*" ]; then
+	# Use the current repo
+	repopath="$(pwd)"
+else
+	# Get the specified repo
+	repopath="$(readlink -f "$repobasepath/$*")"
+fi
+
+# Check that the destination directory exists
+if [ ! -d "$repopath" ]; then
+	echo "'${repopath}' does not exist" 1>&2
+	exit 1
+fi
+
+# Check that the repo is inside the repos base path
+if [[ "$repopath" != "${repobasepath}/"* ]]; then
+	echo "'${repopath}' is not within '${repobasepath}'; unable to proceed" 1>&2
+	exit 1
+fi
+
+# Change directory to the repo
+cd $repopath
+
+# Apply my git ID
+git config user.name $GITHUB_USERNAME
+git config user.email $GITHUB_EMAIL
+
+echo "git username and email set to $(git config user.name) $(git config user.email)" 1>&2
+
