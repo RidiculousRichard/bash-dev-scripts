@@ -8,6 +8,7 @@ They are designed to be cloned into a subdirectory of your multi-workspace base 
     .
     |-- multi-workspace
     |    |-- bash-dev-scripts
+	|    |   |-- function-git-prompt        (tweaked version of the classic git-prompt.sh; needs to be sourced in .bashrc)
     |    |   |-- get-repo-base-path         (get the absolute multi-workspace path)
     |    |   |-- LICENSE
     |    |   |-- set-github-user            (set user.name and user.email to be correct for github)
@@ -18,3 +19,7 @@ The following environment variables are expected to be set:
 * GITHUB_USERNAME
 * GITHUB_EMAIL
 * PATH (to include the bash-dev-scripts directory)
+* (optional) GIT_PS1_SHOWDIRTYSTATE="SHOWDIRTYSTATE"
+* (optional) GIT_PS1_SHOWUNTRACKEDFILES="SHOWUNTRACKEDFILES"
+* (optional) GIT_PS1_SHOWUPSTREAM="SHOWUPSTREAM"
+* (example) PS1='\[\033[30m\][\u@\h\[\033[33m\]$(__git_ps1 " (%s)")\[\033[32m\] \W\[\033[30m\]]\[\033[0m\]\$ '
