@@ -7,13 +7,13 @@ They are designed to be cloned into a subdirectory of your multi-workspace base 
     $ tree .
     .
     |-- multi-workspace
-    |    |-- bash-dev-scripts
-	|    |   |-- function-git-prompt        (tweaked version of the classic git-prompt.sh; needs to be sourced in .bashrc)
-    |    |   |-- get-repo-base-path         (get the absolute multi-workspace path)
-    |    |   |-- LICENSE
-    |    |   |-- set-github-user            (set user.name and user.email to be correct for github)
-    |    |   `-- source-auto-gopath         (source the correct GOPATH for a go project; invoke as ". source-go-path")
-    |    |-- other projects
+    |   |-- bash-dev-scripts
+    |   |   |-- function-git-prompt      (tweaked version of the classic git-prompt.sh; needs to be sourced in .bashrc)
+    |   |   |-- get-repo-base-path       (get the absolute multi-workspace path)
+    |   |   |-- LICENSE
+    |   |   |-- set-github-user          (set user.name and user.email to be correct for github)
+    |   |   `-- source-auto-gopath       (source the correct GOPATH for a go project; invoke as ". source-go-path")
+    |   |-- other projects
 
 The following environment variables are expected to be set:
 * GITHUB_USERNAME
