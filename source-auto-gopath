@@ -1,7 +1,9 @@
 #!/bin/bash
 
+set -euf -o pipefail
+
 # Check to see if not being sourced
-if [[ $0 == "$BASH_SOURCE" ]]; then
+if [[ $0 == "${BASH_SOURCE-}" ]]; then
 	echo "This script shoud be sourced to actually set the GOPATH" 1>&2
 	echo "Running it in a sub-shell like this means it has no effect" 1>&2
 fi
@@ -23,8 +25,9 @@ provisionalgopath="$(echo "$provisionalgopath/src/" | sed 's:/src/.*::')"
 if [[ "$provisionalgopath" == "." ]]; then
 	echo "'$*' does not appear to be within a usable gopath" 1>&2
 	unset repobasepath provisionalgopath
-	if [[ $0 != "$BASH_SOURCE" ]]; then
-		return 1
+	if [[ $0 != "${BASH_SOURCE-}" ]]; then
+		# No error code when sourced to avoid killing the shell
+		return 0
 	fi
 	exit 1
 fi
@@ -33,8 +36,9 @@ fi
 if [ ! -d "$provisionalgopath/src" ]; then
 	echo "'$provisionalgopath/src' must exist for it to be used as a go path" 1>&2
 	unset repobasepath provisionalgopath
-	if [[ $0 != "$BASH_SOURCE" ]]; then 
-		return 1
+	if [[ $0 != "${BASH_SOURCE-}" ]]; then
+		# No error code when sourced to avoid killing the shell
+		return 0
 	fi
 	exit 1
 fi
@@ -43,13 +47,14 @@ fi
 if [[ "$provisionalgopath" != "${repobasepath}/"* ]]; then
 	echo "'${provisionalgopath}' is not within '${repobasepath}'; unable to proceed" 1>&2
 	unset repobasepath provisionalgopath
-	if [[ $0 != "$BASH_SOURCE" ]]; then 
-		return 1
+	if [[ $0 != "${BASH_SOURCE-}" ]]; then
+		# No error code when sourced to avoid killing the shell
+		return 0
 	fi
 	exit 1
 fi
 
-if [[ $0 == "$BASH_SOURCE" ]]; then
+if [[ $0 == "${BASH_SOURCE-}" ]]; then
 	echo "GOPATH would have been set to $provisionalgopath" 1>&2
 else
 	export GOPATH="$provisionalgopath"
