@@ -1,5 +1,10 @@
 #!/bin/bash
 
+# Script designed to be sourced in order to automatically set the gopath
+# It finds the shorts path to a src directory is the directory tree
+# Only a src directory wthin the $(get-repo-base-path) is used
+# If no path is provided then the current orking directory is used instead
+
 set -euf -o pipefail
 
 # Check to see if not being sourced
