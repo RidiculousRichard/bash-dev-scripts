@@ -15,11 +15,12 @@ They are designed to be cloned into a subdirectory of your multi-workspace base 
     |   |   `-- source-auto-gopath       (source the correct GOPATH for a go project; invoke as ". source-go-path")
     |   |-- other projects
 
-The following environment variables are expected to be set:
+The following environment variables are expected to be exported:
 * GITHUB_USERNAME
 * GITHUB_EMAIL
 * PATH (to include the bash-dev-scripts directory)
 * (optional) GIT_PS1_SHOWDIRTYSTATE="SHOWDIRTYSTATE"
 * (optional) GIT_PS1_SHOWUNTRACKEDFILES="SHOWUNTRACKEDFILES"
 * (optional) GIT_PS1_SHOWUPSTREAM="SHOWUPSTREAM"
+* (optional) GIT_PS1_SHOWTOPLEVEL="SHOWTOPLEVEL"
 * (example) PS1='\[\033[30m\][\u@\h\[\033[33m\]$(__git_ps1 " (%s)")\[\033[32m\] \W\[\033[30m\]]\[\033[0m\]\$ '
