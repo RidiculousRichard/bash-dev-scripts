@@ -1,0 +1,17 @@
+#!/bin/bash 
+
+# Incrementally build the tools
+
+set -eu -o pipefail
+
+# Get the script directory
+scriptdir="$(dirname "$(readlink -f "$0")")"
+cd "$scriptdir"
+
+# Ensure the src directory is present
+mkdir -p "$scriptdir/src"
+
+# Perform the golang builds and copy them to the repository top level
+. source-auto-gopath 1>/dev/null 2>/dev/null
+go install ...
+cp "$scriptdir/bin/"* ../

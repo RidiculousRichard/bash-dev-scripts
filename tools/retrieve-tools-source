@@ -1,0 +1,17 @@
+#!/bin/bash
+
+# Retrieve a fresh set of 3rd party tools
+
+set -euf -o pipefail
+
+# Get the script directory
+scriptdir="$(dirname "$(readlink -f "$0")")"
+cd "$scriptdir"
+
+# Totally remove all of the source then re-create the src directory
+"$scriptdir/remove-tools"
+mkdir -p "$scriptdir/src"
+
+# Go get the source code
+. source-auto-gopath 1>/dev/null 2>/dev/null
+go get github.com/kardianos/govendor

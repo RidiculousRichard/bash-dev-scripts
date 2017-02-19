@@ -1,0 +1,15 @@
+#!/bin/bash
+
+# Remove all of the tools altogether
+
+set -euf -o pipefail
+
+# Get the script directory
+scriptdir="$(dirname "$(readlink -f "$0")")"
+cd "$scriptdir"
+
+# Clean the build
+"$scriptdir/clean-tools"
+
+# Remove the source directory
+rm -fr "$scriptdir/bin" "$scriptdir/pkg" "$scriptdir/src"

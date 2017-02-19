@@ -5,10 +5,10 @@
 # Only a src directory wthin the $(get-repo-base-path) is used
 # If no path is provided then the current orking directory is used instead
 
-set -euf -o pipefail
-
 # Check to see if not being sourced
 if [[ $0 == "${BASH_SOURCE-}" ]]; then
+	# Only use set when not being sourced to avoid effecting the calling environment
+	set -euf -o pipefail
 	echo "This script shoud be sourced to actually set the GOPATH" 1>&2
 	echo "Running it in a sub-shell like this means it has no effect" 1>&2
 fi

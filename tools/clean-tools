@@ -1,0 +1,22 @@
+#!/bin/bash
+
+# Clean out all builds
+
+set -euf -o pipefail
+
+# Get the script directory
+scriptdir="$(dirname "$(readlink -f "$0")")"
+cd "$scriptdir"
+
+# For every file in the bin direcotry, remove it from the repository top level too
+if [ -d bin ]; then
+	pushd bin 1>/dev/null
+	find . -type f |
+	while read filename; do
+		rm -fr "../../$filename"
+	done
+	popd 1>/dev/null
+fi
+
+# Remove the bin and pkg directories themselves
+rm -fr bin pkg
