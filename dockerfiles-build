@@ -1,0 +1,72 @@
+#!/bin/bash
+
+# Script to build and save specific docker containers to the specified directory with the paths to the dockerfile directory arriving on the standard input
+# Args: $1 = _out-directory_ (required)
+
+set -eu -o pipefail
+
+outdir="${1-}"
+timestamp="$(date '+%Y-%m-%dT%H-%M%Z')"
+
+printlnErr() {
+	# Using printf prevents echo from mangling any unusual filename characters
+	printf "%s\n" "$1" >&2
+}
+
+# Verify that an outdir has been specified and that it exists
+if [ -z "$outdir" ] || ! [ -d "$outdir" ] || [ "$#" -ne "1" ]; then
+	printlnErr "Correct invocation is: $(basename "$0") _out-directory_ <_dockerfile-directory-paths_"
+	exit 1
+fi
+
+printlnErr "Reading dockerfile directories from std input.  Building can take a long time..."
+
+while IFS= read -r dockerfilepath; do
+	printlnErr ""
+	printlnErr "Building $dockerfilepath"
+	# Filter out empty input
+	if [ -n "$dockerfilepath" ]; then
+		
+		# Process the path name
+		name="$(basename "$dockerfilepath")"
+		
+		# Check that image does not already exist
+		if ! docker images --format "{{.Repository}}" | grep -q -F -- "$name"; then
+			
+			# Get docker to build the image
+			printlnErr "Building $name:$timestamp from $dockerfilepath"
+			docker build -t "$name":$timestamp "$dockerfilepath"
+			
+			# Delete any pre-existing images for this container
+			oldimagefiles="$(ls "$outdir/$name"* 2>/dev/null || true) $(ls "$outdir/run-$name" 2>/dev/null || true)"
+			if [ "$(printf "%s" "$oldimagefiles" | wc -w)" -gt "0" ]; then
+				# There is something to delete so tell the user you have done it
+				printlnErr "Deleting old images $oldimagefiles"
+				rm "$outdir/$name"* 2>/dev/null || true
+				rm -fr "$outdir/run-$name" 2>/dev/null || true
+			fi
+			
+			# Output the image (but only one if there are duplicates with different tags)
+			image="$(docker images --format "{{.Repository}} {{.ID}}" | grep -F -- "$name" | awk '{print $2}' | LC_ALL=C sort -u)"
+			num="$(printf "%s" "$image" | wc -w)"
+			if [ "$num" -ne "1" ]; then
+				printlnErr "$num images detected for $name; aborting"
+				exit 1
+			fi
+			filename="$name:$timestamp.$image.save.xz"
+			printlnErr "Saving image to $filename"
+			docker save "$image" | xz -z9 > "$outdir/$filename"
+			
+			# output any image specific run script, enforcing a naming convention
+			if cp "$dockerfilepath"/run* "$outdir/run-$name" 2>/dev/null; then
+				printlnErr "Use $outdir/run_$name to use the image"
+			fi
+		else
+			printlnErr "A $name image already exists; remove it to build it again"
+		fi
+	else
+		printlnErr "Skipping empty path"
+	fi
+	printlnErr ""
+done
+
