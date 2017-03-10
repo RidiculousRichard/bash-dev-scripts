@@ -8,6 +8,7 @@ They are designed to be cloned into a subdirectory of your multi-workspace base 
     .
     |-- multi-workspace
     |   |-- bash-dev-scripts
+    |   |   |-- docker-find-dependants   (match naything against the args or stdin and return aby dependants)
     |   |   |-- dockerfiles-build        (build all docker directories passed in on stdin that have no loaded images)
     |   |   |-- function-git-prompt      (tweaked version of the classic git-prompt.sh; needs to be sourced in .bashrc)
     |   |   |-- get-repo-base-path       (get the absolute multi-workspace path)
