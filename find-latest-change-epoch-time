@@ -1,0 +1,76 @@
+#!/bin/bash
+
+# Search paths specified as arguments or provided as separate lines on stdin, find the most recently change ordinary file and return the epoch change time on stdout
+# Symbolic links will be ignored
+
+set -euf -o pipefail
+
+printlnErr() {
+	# Using printf prevents echo from mangling any unusual filename characters
+	printf "%s\n" "$1" >&2
+}
+
+latestTimeList=""
+
+appendLatestChangeFromFileToList() {
+	# Append the epoch time of file $1 to the latestTimeList
+	latestTimeList="$(printf "%s\n%s" "$latestTimeList" "$(stat "$1" --format '%Y')")"
+}
+
+appendLatestChangeFromDirecotryToList() {
+	# Append the latest epoch time from directory $1 to the latestTimeList
+	someFiles="$(find "$1" -type f)"
+	if [ -n "$someFiles" ]; then
+		latestTimeList="$(printf "%s\n%s" "$latestTimeList" "$(printf "%s" "$someFiles" | xargs stat --format '%Y' | LC_ALL=C sort -nr | head -n 1)")"
+	fi
+}
+
+appendLatestChangeFromSearchPathToList() {
+	# Get the latest epoch time change from the $1 path and append it to latestTimeList
+
+	# Check path exists
+	searchpath="${1-}"
+	if [ -z "$searchpath" ]; then
+		printlnErr "Path $searchpath does not exist"
+		exit 1
+	fi
+
+	# Determine the path type to either get the latest change
+	pathtype="$(stat "$searchpath" --format '%F')"
+	case "$pathtype" in
+	"directory")
+		appendLatestChangeFromDirecotryToList "$searchpath"
+		;;
+	"regular file")
+		appendLatestChangeFromFileToList "$searchpath"
+		;;
+	"regular empty file")
+		appendLatestChangeFromFileToList "$searchpath"
+		;;
+	"symbolic link")
+		# Ignoring symbolic links
+		;;
+	*)
+		printlnErr "$searchpath has an unexpected type: $pathtype"
+		exit 1
+		;;
+	esac
+}
+
+
+# Determine if paths are in the args or if stdin should be processed
+if [ "$#" -ge "1" ]; then
+	# Find latest changed file for each argpath
+	for argpath in "$@"; do
+		appendLatestChangeFromSearchPathToList "$argpath"
+	done
+else
+	# Search every stdin path
+	while IFS= read -r stdinpath; do
+		appendLatestChangeFromSearchPathToList "$stdinpath"
+	done
+fi
+
+# Sort the latestTimeList and return the latest change in epoch time
+printf "%s" "$latestTimeList" | LC_ALL=C sort -nr | head -n 1
+exit 0
