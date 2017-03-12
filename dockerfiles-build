@@ -5,16 +5,36 @@
 
 set -eu -o pipefail
 
-outdir="${1-}"
-timestamp="$(date '+%Y-%m-%dT%H-%M%Z')"
-
 printlnErr() {
 	# Using printf prevents echo from mangling any unusual filename characters
 	printf "%s\n" "$1" >&2
 }
 
+rmImageSaveFile() {
+	# $1 is the image name
+	rm "$outdir/$1"* 2>/dev/null || true
+	rm -fr "$outdir/run-$1"* 2>/dev/null || true
+}
+
+saveImage() {
+	# $1 is the image name
+	# $2 is the timestamp
+	# $3 is the image ID
+	# $4 is the docker file path that is being built
+	filename="$1:$2.$3.save.xz"
+	printlnErr "Saving image to $filename"
+	docker save "$3" | xz -z9 > "$outdir/$filename"
+	# output any image specific run script, enforcing a naming convention
+	if cp "$4"/run* "$outdir/run-$1" 2>/dev/null; then
+		printlnErr "Use $outdir/run-$1 to use the image"
+	fi
+}
+
+outdir="${1-}"
+timestamp="$(date '+%Y-%m-%dT%H-%M-%S%Z')"
+
 # Verify that an outdir has been specified and that it exists
-if [ -z "$outdir" ] || ! [ -d "$outdir" ] || [ "$#" -ne "1" ]; then
+if [ "$#" -ne "1" ] || [ -z "$outdir" ] || ! [ -d "$outdir" ]; then
 	printlnErr "Correct invocation is: $(basename "$0") _out-directory_ <_dockerfile-directory-paths_"
 	exit 1
 fi
@@ -22,51 +42,99 @@ fi
 printlnErr "Reading dockerfile directories from std input.  Building can take a long time..."
 
 while IFS= read -r dockerfilepath; do
-	printlnErr ""
-	printlnErr "Building $dockerfilepath"
 	# Filter out empty input
 	if [ -n "$dockerfilepath" ]; then
+		printlnErr ""
 		
 		# Process the path name
 		name="$(basename "$dockerfilepath")"
 		
-		# Check that image does not already exist
-		if ! docker images --format "{{.Repository}}" | grep -q -F -- "$name"; then
-			
+		# Check there are not multiple images loaded or saved
+		imageInfo="$(docker images --format '{{.ID}} {{.Repository}} {{.Tag}}' | grep -F -- " $name ")" || true
+		imageFile="$(find "$outdir" -mindepth 1 -maxdepth 1 -name "$name:*" -type f)"
+		if [ "$(printf "%s\n" "$imageInfo" | wc -l)" -gt "1" ]; then
+			printlnErr "Multiple docker images are loaded for $name; aborting"
+			printlnErr "$imageInfo"
+			exit 1
+		fi
+		if [ "$(printf "%s\n" "$imageFile" | wc -l)" -gt "1" ]; then
+			printlnErr "Multiple image save files located for $name; aborting"
+			printlnErr "$imageFile"
+			exit 1
+		fi
+
+		# Check to see if the image is out of date or does not already exist
+		sourceTimestamp="$(find-latest-change-epoch-time "$dockerfilepath")"
+		needToBuild=""
+		if [ -z "$imageInfo" ]; then
+
+			# This image does not exist and should be rebuilt
+			printlnErr "$name is mising either a loaded image or a saved image file"
+			needToBuild="true"
+		else
+
+			# Check that the image is up to date
+			imageTimestamp="$(printf "%s" "$imageInfo" | awk '{print $3}')"
+			normImageTimestamp="$(printf "%s" "$imageTimestamp" | sed 's|\(T[0-9]*\)-|\1:|' | sed 's|\(:[0-9]*\)-|\1:|')"
+			if [ -z "$normImageTimestamp" ] || [ "$(date -d "$normImageTimestamp" +%s)" -lt "$sourceTimestamp" ]; then
+
+				# The image is old and so needs to be rebuilt
+				printlnErr "$name has an out of date image"
+				needToBuild="true"
+			fi
+
+			# Check that the save file is up to date
+			if [ -z "$needToBuild" ]; then
+				normFileTimestamp=""
+				if [ -n "$imageFile" ]; then
+					normFileTimestamp="$(printf "%s" "$imageFile" | grep -P '(?<=:)[^.]+' -o | sed 's|\(T[0-9]*\)-|\1:|' | sed 's|\(:[0-9]*\)-|\1:|')"
+				fi
+				if [ -z "$normFileTimestamp" ] || [ "$(date -d "$normFileTimestamp" +%s)" -lt "$sourceTimestamp" ]; then
+
+					# The save file is old so save the image
+					printlnErr "$name has an out of date or missing saved image file; saving it"
+					rmImageSaveFile "$name"
+					imageId="$(printf "%s" "$imageInfo" | awk '{print $1}')"
+					saveImage "$name" "$imageTimestamp" "$imageId" "$dockerfilepath"
+				fi
+			fi
+		fi
+
+		if [ -n "$needToBuild" ]; then
+			# Rebuild - removing any containers / loaded images or existing save file
+			dependants="$(docker-find-dependants "$name")"
+			containersInfo="$(printf "%s" "$dependants" | grep -P "^Container ")" || true
+			if [ -n "$containersInfo" ]; then
+				printf "%s\n" "$containersInfo" | while IFS= read -r aContainerInfo; do
+					printlnErr "Stopping $aContainerInfo"
+					docker stop "$(printf "%s" "$aContainerInfo" | awk '{print $2}')"
+				done
+			fi
+			imagesInfo="$(printf "%s" "$dependants" | grep -P "^Image ")" || true
+			if [ -n "$imagesInfo" ]; then
+				printf "%s\n" "$imagesInfo" | while IFS= read -r anImageInfo; do
+					printlnErr "Removing $anImageInfo"
+					docker rmi -f "$(printf "%s" "$anImageInfo" | awk '{print $2}')"
+				done
+			fi
+			rmImageSaveFile "$name"
+
 			# Get docker to build the image
 			printlnErr "Building $name:$timestamp from $dockerfilepath"
 			docker build -t "$name":$timestamp "$dockerfilepath"
 			
-			# Delete any pre-existing images for this container
-			oldimagefiles="$(ls "$outdir/$name"* 2>/dev/null || true) $(ls "$outdir/run-$name" 2>/dev/null || true)"
-			if [ "$(printf "%s" "$oldimagefiles" | wc -w)" -gt "0" ]; then
-				# There is something to delete so tell the user you have done it
-				printlnErr "Deleting old images $oldimagefiles"
-				rm "$outdir/$name"* 2>/dev/null || true
-				rm -fr "$outdir/run-$name" 2>/dev/null || true
-			fi
-			
 			# Output the image (but only one if there are duplicates with different tags)
-			image="$(docker images --format "{{.Repository}} {{.ID}}" | grep -F -- "$name" | awk '{print $2}' | LC_ALL=C sort -u)"
-			num="$(printf "%s" "$image" | wc -w)"
+			imageId="$(docker images --format "{{.Repository}} {{.ID}}" | grep -F -- "$name" | awk '{print $2}' | LC_ALL=C sort -u)"
+			num="$(printf "%s" "$imageId" | wc -w)"
 			if [ "$num" -ne "1" ]; then
 				printlnErr "$num images detected for $name; aborting"
 				exit 1
 			fi
-			filename="$name:$timestamp.$image.save.xz"
-			printlnErr "Saving image to $filename"
-			docker save "$image" | xz -z9 > "$outdir/$filename"
+			saveImage "$name" "$timestamp" "$imageId" "$dockerfilepath"
 			
-			# output any image specific run script, enforcing a naming convention
-			if cp "$dockerfilepath"/run* "$outdir/run-$name" 2>/dev/null; then
-				printlnErr "Use $outdir/run_$name to use the image"
-			fi
 		else
-			printlnErr "A $name image already exists; remove it to build it again"
+			printlnErr "Image $name has already been built; remove it to build it again"
 		fi
-	else
-		printlnErr "Skipping empty path"
 	fi
-	printlnErr ""
 done
 
