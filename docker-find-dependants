@@ -9,26 +9,21 @@
 
 set -euf -o pipefail
 
-debugMsg() {
-	true
-	#printf "%s\n" "$@" >&2
-}
-
 
 specifiedParents=""
-# Find all the images that need to be removed
+# Find all the parents
 if [ "$#" -ge "1" ]; then
-	# Images for removal in args
+	# Parents are in args
 	specifiedParents="$(printf " %s\n" "$@")"
 else
-	# Images for removal to arrive via stdin
+	# Parents arrive via stdin
 	while IFS= read -r inStr; do
 		if [ -n "$inStr" ]; then
-			specifiedParents="$(printf "%s %s\n" "$specifiedParents" "$inStr")"
+			inStr="${inStr#"${inStr%%[![:space:]]*}"}"
+			specifiedParents="$(printf "%s\n %s" "$specifiedParents" "$inStr")"
 		fi
 	done
 fi
-debugMsg "DBG:1 specifiedParents = '$specifiedParents'"
 
 # Check there is some input
 if [ -z "$specifiedParents" ]; then
@@ -40,53 +35,40 @@ fi
 containersData="$(docker ps -a --format 'Container {{.ID}} {{.Image}} {{.Names}} {{.Labels}}' --no-trunc)"
 allImagesData="$(docker images -a --format 'Image {{.ID}} {{.Repository}}:{{.Tag}} {{.Repository}} {{.Tag}}' --no-trunc | sed 's/ [^:]*:/ /')"
 namedImagesData="$(docker images --format 'Image {{.ID}} {{.Repository}}:{{.Tag}}' --no-trunc | sed 's/ [^:]*:/ /')"
-debugMsg "DBG:2 containersData = '$containersData'"
-debugMsg "DBG:3 allImagesData = '$allImagesData'"
-debugMsg "DBG:4 namedImagesData = '$namedImagesData'"
 
 # Check to see if you can find a matching container
 parents=""
+matchedContainerIds=""
+parentImageIds=""
 while IFS= read -r aParent; do
 	if [ -z "$aParent" ]; then
 		continue
 	fi
 	
 	# Use space to ensure matching starts at the beginning of a field
-	anImageId=" $(printf "%s" "$containersData" | grep -F " $aParent" | awk '{print $3}' || true)"
-	if [ "$anImageId" != " " ]; then
+	aContainerId=" $(printf "%s" "$containersData" | grep -F "$aParent" | awk '{print $3}' || true)"
+	if [ "$aContainerId" != " " ]; then
 		# A container matched so use the image ID
-		parents="$(printf "%s%s\n" "$parents" " $anImageId")"
+		matchedContainerIds="$(printf "%s\n%s" "$matchedContainerIds" "$aContainerId")"
 	else
-		# Not a container, so presumably an image
-		parents="$(printf "%s%s\n" "$parents" " $aParent")"
+		# Not a container, so look for an image and get it's full ID
+		while IFS= read -r parentImageId; do
+			if [ -z "$parentImageId" ]; then
+				continue
+			fi
+			# Add the full ID to the parentImageIds, including a space to assist matching later
+			parentImageIds="$(printf "%s%s\n" "$parentImageIds" " $parentImageId")"
+		done <<< "$(printf "%s" "$allImagesData" | grep -F "$aParent" | awk '{print $2}')"
 	fi
-done <<< $(printf "%s\n" "$specifiedParents") # Performing while inside this shell
-#debugMsg "DBG:5 parents = '$parents'"
+done <<< "$(printf "%s\n" "$specifiedParents")"
 
-# Get the full parent image ID's
-parentImageIds=""
-while IFS= read -r aParent; do
-	debugMsg "DBG:6 aParent = '$aParent'"
-	# Find anything matching the parent and get it's full ID
-	while IFS= read -r parentImageId; do
-		if [ -z "$parentImageId" ]; then
-			continue
-		fi
-		debugMsg "DBG:7 parentImageId = '$parentImageId'"
-		# Add the full ID to the parentImageIds, including a space to assist matching later
-		parentImageIds="$(printf "%s%s\n" "$parentImageIds" " $parentImageId")"
-	done <<< $(printf "%s" "$allImagesData" | grep -F " $aParent" | awk '{print $2}')
-done <<< $(printf "%s" "$parents") # Performing while inside this shell
-debugMsg "DBG:8 parentImageIds = '$parentImageIds'"
-
-# Stop if there are no parents
-if [ -z "$parentImageIds" ]; then
+# Stop if there are no parents or containers
+if [ -z "$parentImageIds" ] && [ -z "$matchedContainerIds" ]; then
 	exit 0
 fi
 
 # Deduplicate
 parentImageIds="$(printf "%s" "$parentImageIds" | LC_ALL=C sort -u)"
-debugMsg "DBG:9 parentImageIds = '$parentImageIds'"
 
 # Find descendent images
 descendentImages=""
@@ -124,32 +106,32 @@ while IFS= read -r imageData; do
 	if [ -n "$areDescendents" ]; then
 		descendentImages="$(printf "%s%s\n" "$descendentImages" "$imageIdsChecked")"
 	fi
-done <<< $(printf "%s" "$allImagesData") # Performing while inside this shell
-debugMsg "DBG:10 descendentImages = '$descendentImages'"
-
-checkIfDescendentImageFound() {
-	# Check to see if this is a descendent from any parent
-	# $1 is thisImageId
-	# $2 is the display text
-	# Using the space to ensure matching form the start of an ID
-	if printf "%s" "$descendentImages" | grep -q -F " $1"; then
-		# We've found a descendent; display it quick before it gets away
-		debugMsg "DBG: Found "
-		printf "%s\n" "$2"
-	fi
-}
+done <<< "$(printf "%s" "$allImagesData")"
 
 # Identify any named images that are descendents of the parentImageIds
-debugMsg "DBG:11 namedImagesData = '$namedImagesData'"
 printf "%s\n" "$namedImagesData" | while IFS= read -r imageData; do
 	thisImageId="$(printf "%s" "$imageData" | awk '{print $2}')"
-	checkIfDescendentImageFound "$thisImageId" "$imageData"
+	if printf "%s" "$descendentImages" | grep -q -F " $thisImageId"; then
+		# We've found a descendent
+		printf "%s\n" "$imageData"
+	fi
 done
 
 # Identify containers that rely on images that are descendents of the parentImageIds
-debugMsg "DBG:12 containersData = '$containersData'"
-printf "%s\n" "$containersData" | while IFS= read -r containerData; do
+printf "%s\n" "$containersData" || while IFS= read -r containerData; do
+	# Check to see if this container is dependant on a dependant image
 	thisImageId="$(printf "%s" "$containerData" | awk '{print $3}')"
-	checkIfDescendentImageFound "$thisImageId" "$containerData"
-done
+	if printf "%s" "$descendentImages" | grep -q -F " $thisImageId"; then
+		# We've found a descendent
+		printf "%s\n" "$containerData"
+		continue
+	fi
 
+	# Check to see if this container itself has been matched
+	thisContainerId="$(printf "%s" "$containerData" | awk '{print $2}')"
+	if printf "%s" "$matchedContainerIds" | grep -q -F " $thisContainerId"; then
+		# We've matched a container
+		printf "%s\n" "$containerData"
+		continue
+	fi	
+done
