@@ -107,7 +107,9 @@ while IFS= read -r dockerfilepath; do
 			if [ -n "$containersInfo" ]; then
 				printf "%s\n" "$containersInfo" | while IFS= read -r aContainerInfo; do
 					printlnErr "Stopping $aContainerInfo"
-					docker stop "$(printf "%s" "$aContainerInfo" | awk '{print $2}')"
+					containerId="$(printf "%s" "$aContainerInfo" | awk '{print $2}')"
+					docker stop "$containerId"
+					docker rm -f "$containerId" 2>/dev/null || true
 				done
 			fi
 			imagesInfo="$(printf "%s" "$dependants" | grep -P "^Image ")" || true
