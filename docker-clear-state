@@ -1,0 +1,64 @@
+#!/bin/bash
+
+# Script to clear out docker containers and images using the list arriving on the standard input or in args (but not both) as image repository / tags / repository:tag / id's.
+# Be careful with what you provide; all of the following will be removed:
+#    Any image name / tag / name:tag / id that has a substring in it that matches the imput
+#    Any other image that relies on the images specified
+#    Any containers (running or not) that use any of these images
+#
+# Recommendations:
+#    If you are matching on a truncated id then prefix it with "sha256:" to guarentee you are only matching the start of the full id
+#    If you are matching on a complete repository name then prefix with a space " " and postfix it a colon ":" to minimise the chance of substring matches
+#    If you are matching on a complete tag then prefix it with a colon ":" and postfix it with a space " " to minimise the chance of substring matches
+#    If you are matching on a complete repository:tag prefix and postfix it with a space " " to minimise the chance of substring matches 
+
+set -euf -o pipefail
+
+
+printlnErr() {
+	# Using printf prevents echo from mangling any unusual filename characters
+	printf "%s\n" "$1" >&2
+}
+
+
+specifiedForRemoval=""
+# Find all the images that need to be removed
+if [ "$#" -ge "1" ]; then
+	# Images for removal in args
+	specifiedForRemoval="$(printf " %s\n" $@)"
+else
+	# Images for removal to arrive via stdin
+	while IFS= read -r inStr; do
+		specifiedForRemoval="$(printf "%s\n%s" "$specifiedForRemoval" "$inStr")"
+	done
+fi
+
+# Check there is some input
+if [ -z "$specifiedForRemoval" ]; then
+	printlnErr "Nothing specified for removal; images/containers must be specified as either args or on the stdin"
+	exit 1
+fi
+
+# Find all dependants to be removed
+forRemoval="$(printf "%s\n" "$specifiedForRemoval" | docker-find-dependants)"
+
+# Remove the containers first
+containersInfo="$(printf "%s" "$forRemoval" | grep -P "^Container ")" || true
+if [ -n "$containersInfo" ]; then
+	printf "%s\n" "$containersInfo" | while IFS= read -r aContainerInfo; do
+		printlnErr "Stopping $aContainerInfo"
+		containerId="$(printf "%s" "$aContainerInfo" | awk '{print $2}')"
+		docker stop "$containerId"
+		docker rm -f "$containerId" 2>/dev/null || true
+	done
+fi
+
+# Remove the images
+imagesInfo="$(printf "%s" "$forRemoval" | grep -P "^Image ")" || true
+if [ -n "$imagesInfo" ]; then
+	printf "%s\n" "$imagesInfo" | while IFS= read -r anImageInfo; do
+		printlnErr "Removing $anImageInfo"
+		docker rmi -f "$(printf "%s" "$anImageInfo" | awk '{print $2}')"
+	done
+fi
+

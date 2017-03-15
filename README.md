@@ -6,15 +6,17 @@ They are designed to be cloned into a subdirectory of your multi-workspace base 
 
     $ tree .
     .
-    |-- multi-workspace
-    |   |-- bash-dev-scripts
-    |   |   |-- docker-find-dependants   (match naything against the args or stdin and return aby dependants)
-    |   |   |-- dockerfiles-build        (build all docker directories passed in on stdin that have no loaded images)
-    |   |   |-- function-git-prompt      (tweaked version of the classic git-prompt.sh; needs to be sourced in .bashrc)
-    |   |   |-- get-repo-base-path       (get the absolute multi-workspace path)
-    |   |   |-- set-github-user          (set user.name and user.email to be correct for github)
-    |   |   `-- source-auto-gopath       (source the correct GOPATH for a go project; invoke as ". source-go-path")
-    |   |-- other projects
+    |- multi-workspace
+    |  |- bash-dev-scripts
+    |  |  |- docker-clear-state             (remove all any images or containers that match and their dependants)
+    |  |  |- dockerfiles-build              (build all docker directories passed in on stdin that have no loaded images)
+    |  |  |- docker-find-dependants         (match anything against the args or stdin and return any dependants)
+    |  |  |- find-latest-change-epoch-time  (identify the latest file modification time in the directory trees specified)
+    |  |  |- function-git-prompt            (tweaked version of the classic git-prompt.sh; needs to be sourced in .bashrc)
+    |  |  |- get-repo-base-path             (get the absolute multi-workspace path)
+    |  |  |- set-github-user                (set user.name and user.email to be correct for github)
+    |  |  `- source-auto-gopath             (source the correct GOPATH for a go project; invoke as ". source-go-path")
+    |  |- other projects
 
 The following environment variables are expected to be exported:
 * GITHUB_USERNAME
