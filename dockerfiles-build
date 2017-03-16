@@ -123,7 +123,7 @@ while IFS= read -r dockerfilepath; do
 
 			# Get docker to build the image
 			printlnErr "Building $name:$timestamp from $dockerfilepath"
-			docker build -t "$name":$timestamp "$dockerfilepath"
+			docker build -t "$name:$timestamp" "$dockerfilepath"
 			
 			# Output the image (but only one if there are duplicates with different tags)
 			imageId="$(docker images --format "{{.Repository}} {{.ID}}" | grep -F -- "$name" | awk '{print $2}' | LC_ALL=C sort -u)"

@@ -25,7 +25,7 @@ specifiedForRemoval=""
 # Find all the images that need to be removed
 if [ "$#" -ge "1" ]; then
 	# Images for removal in args
-	specifiedForRemoval="$(printf " %s\n" $@)"
+	specifiedForRemoval="$(printf " %s\n" "$@")"
 else
 	# Images for removal to arrive via stdin
 	while IFS= read -r inStr; do

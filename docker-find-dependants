@@ -37,7 +37,6 @@ allImagesData="$(docker images -a --format 'Image {{.ID}} {{.Repository}}:{{.Tag
 namedImagesData="$(docker images --format 'Image {{.ID}} {{.Repository}}:{{.Tag}}' --no-trunc | sed 's/ [^:]*:/ /')"
 
 # Check to see if you can find a matching container
-parents=""
 matchedContainerIds=""
 parentImageIds=""
 while IFS= read -r aParent; do

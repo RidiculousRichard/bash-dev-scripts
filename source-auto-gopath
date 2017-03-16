@@ -17,12 +17,12 @@ fi
 repobasepath=$(get-repo-base-path)
 
 # Get the repo to be acted upon
-if [ -z "$*" ]; then
+if [ "$#" -eq "0" ]; then
 	# Use the current repo
 	provisionalgopath="$(readlink -f "$(pwd)")"
 else
 	# Get the specified repo
-	provisionalgopath="$(readlink -f "$gobasepath/$*")"
+	provisionalgopath="$(readlink -f "$*")"
 fi
 
 # Try and find the outer go workspace

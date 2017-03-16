@@ -5,4 +5,4 @@
 
 set -euf -o pipefail
 
-echo "$(readlink -f "$(dirname "$0")/..")"
+readlink -f "$(dirname "$0")/.."

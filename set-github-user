@@ -41,11 +41,11 @@ if [[ "$repopath" != "${repobasepath}/"* ]]; then
 fi
 
 # Change directory to the repo
-cd $repopath
+cd "$repopath"
 
 # Apply my git ID
-git config user.name $GITHUB_USERNAME
-git config user.email $GITHUB_EMAIL
+git config user.name "$GITHUB_USERNAME"
+git config user.email "$GITHUB_EMAIL"
 
 echo "git username and email set to $(git config user.name) $(git config user.email)" 1>&2
 
