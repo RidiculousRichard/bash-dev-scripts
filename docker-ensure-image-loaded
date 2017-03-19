@@ -1,0 +1,66 @@
+#!/bin/bash
+
+# Script to ensure the saved docker image paths provided on the standard input or in the args are loaded; if not then load them
+
+set -euf -o pipefail
+
+printLnErr() {
+	# Using printf prevents echo from mangling any unusual filename characters
+	printf "%s\n" "$*" >&2
+}
+
+
+savedImagePaths=""
+# Find all the saved images
+if [ "$#" -ge "1" ]; then
+	# Paths are in args
+	savedImagePaths="$(printf "%s\n" "$@")"
+else
+	# Paths arrive via stdin
+	while IFS= read -r inStr; do
+		if [ -n "$inStr" ]; then
+			# Remove leading and trailing white space and add to the list
+			inStr="${inStr#"${inStr%%[![:space:]]*}"}"
+			inStr="${inStr%"${inStr##*[![:space:]]}"}"
+			savedImagePaths="$(printf "%s\n%s" "$savedImagePaths" "$inStr")"
+		fi
+	done
+fi
+
+# Loop over each saved image in turn
+printf "%s\n" "$savedImagePaths" | while IFS= read -r anImagePath; do
+	
+	# Check that the file exists
+	if ! [ -f "$anImagePath" ]; then
+		printLnErr "$anImagePath is not an existing file; aborting operation"
+		exit 1
+	fi
+	
+	# Check the filename matches the expected pattern
+	imageFilename="$(basename "$anImagePath")"
+	filenamePattern='^[^:]+:[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}-[0-9]{2}-[0-9]{2}[^.]*\.[0-9a-f]{10,}\.save\.xz$'
+	if ! printf "%s" "$imageFilename" | grep -q -E "$filenamePattern"; then
+		printLnErr "The image save file $imageFilename does not match the expected filename pattern '$filenamePattern'; aborting operation"
+		exit 1
+	fi
+
+	# Extract the image repository, tag and ID
+	imageInfo="$(printf "%s" "$imageFilename" | sed 's|.save.xz||')"
+	imageRepoTag="$(printf "%s" "$imageInfo" | awk -F . '{print $1}')"
+	imageId="$(printf "%s" "$imageInfo" | awk -F . '{print $2}')"
+
+	# Check to see if this image is loaded
+	if ! docker images --format '{{.Repository}}:{{.Tag}}.{{.ID}}' --no-trunc | sed 's|\.sha256:|\.|' | grep -q -F "$imageInfo"; then
+
+		# The image is not loaded so load it
+		if ! xzcat "$anImagePath" | docker load 1>&2 || ! docker tag "$imageId" "$imageRepoTag" 1>&2; then
+
+			# Cannot load image; abort
+			printLnErr "Unable to load $anImagePath; aborting operation"
+			exit 1
+		fi
+	fi
+
+	# Output the image ID on the standard out
+	printf "%s\n" "$imageId"
+done
