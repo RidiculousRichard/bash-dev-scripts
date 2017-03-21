@@ -1,7 +1,8 @@
 #!/bin/bash
 
-# Script to build and save specific docker containers to the specified directory with the paths to the dockerfile directory arriving on the standard input
+# Script to build and save specific docker containers to the specified directory with the paths to the dockerfile directory being in the args or arriving on the standard input
 # Args: $1 = _out-directory_ (required)
+#       $2+ = _dockerfile_path_ .... (or expected on std input if not provided in the args)
 
 set -eu -o pipefail
 
@@ -34,14 +35,30 @@ outdir="${1-}"
 timestamp="$(date '+%Y-%m-%dT%H-%M-%S%Z')"
 
 # Verify that an outdir has been specified and that it exists
-if [ "$#" -ne "1" ] || [ -z "$outdir" ] || ! [ -d "$outdir" ]; then
-	printlnErr "Correct invocation is: $(basename "$0") _out-directory_ <_dockerfile-directory-paths_"
+if [ "$#" -lt "1" ] || ([ -n "$outdir" ] && ! [ -d "$outdir" ]); then
+	printlnErr "Correct invocation is: $(basename "$0") _out-directory_ (_dockerfile-directory-path_... || <_dockerfile-directory-paths_...)"
 	exit 1
 fi
 
-printlnErr "Reading dockerfile directories from std input.  Building can take a long time..."
+# Get the dockerfile paths to process
+dockerfilepaths=""
+if [ "$#" -ge "2" ]; then
+	# Paths are in args
+	printlnErr "Using dockerfile directories from args.  Building can take a long time..."
+	shift
+	dockerfilepaths="$(printf "%s\n" "$@")"
+else
+	# Paths arrive via stdin
+	printlnErr "Reading dockerfile directories from std input.  Building can take a long time..."
+	while IFS= read -r inStr; do
+		if [ -n "$inStr" ]; then
+			inStr="${inStr#"${inStr%%[![:space:]]*}"}"
+			dockerfilepaths="$(printf "%s\n%s" "$dockerfilepaths" "$inStr")"
+		fi
+	done
+fi
 
-while IFS= read -r dockerfilepath; do
+printf "%s\n" "$dockerfilepaths" | while IFS= read -r dockerfilepath; do
 	# Filter out empty input
 	if [ -n "$dockerfilepath" ]; then
 		printlnErr ""
@@ -51,16 +68,19 @@ while IFS= read -r dockerfilepath; do
 		
 		# Check there are not multiple images loaded or saved
 		imageInfo="$(docker images --format '{{.ID}} {{.Repository}} {{.Tag}}' | grep -F -- " $name ")" || true
-		imageFile="$(find "$outdir" -mindepth 1 -maxdepth 1 -name "$name:*" -type f)"
 		if [ "$(printf "%s\n" "$imageInfo" | wc -l)" -gt "1" ]; then
 			printlnErr "Multiple docker images are loaded for $name; aborting"
 			printlnErr "$imageInfo"
 			exit 1
 		fi
-		if [ "$(printf "%s\n" "$imageFile" | wc -l)" -gt "1" ]; then
-			printlnErr "Multiple image save files located for $name; aborting"
-			printlnErr "$imageFile"
-			exit 1
+		imageFile=""
+		if [ -n "$outdir" ]; then
+			imageFile="$(find "$outdir" -mindepth 1 -maxdepth 1 -name "$name:*" -type f)"
+			if [ "$(printf "%s\n" "$imageFile" | wc -l)" -gt "1" ]; then
+				printlnErr "Multiple image save files located for $name; aborting"
+				printlnErr "$imageFile"
+				exit 1
+			fi
 		fi
 
 		# Check to see if the image is out of date or does not already exist
@@ -84,12 +104,12 @@ while IFS= read -r dockerfilepath; do
 			fi
 
 			# Check that the save file is up to date
-			if [ -z "$needToBuild" ]; then
+			if [ -n "$outdir" ] && [ -z "$needToBuild" ]; then
 				normFileTimestamp=""
 				if [ -n "$imageFile" ]; then
 					normFileTimestamp="$(printf "%s" "$imageFile" | grep -P '(?<=:)[^.]+' -o | sed 's|\(T[0-9]*\)-|\1:|' | sed 's|\(:[0-9]*\)-|\1:|')"
 				fi
-				if [ -z "$normFileTimestamp" ] || [ "$(date -d "$normFileTimestamp" +%s)" -lt "$sourceTimestamp" ]; then
+				if [ -z "$normFileTimestamp" ] || [ "$(date -d "$normFileTimestamp" +%s)" -lt "$(date -d "$normImageTimestamp" +%s)" ]; then
 
 					# The save file is old so save the image
 					printlnErr "$name has an out of date or missing saved image file; saving it"
@@ -119,7 +139,9 @@ while IFS= read -r dockerfilepath; do
 					docker rmi -f "$(printf "%s" "$anImageInfo" | awk '{print $2}')"
 				done
 			fi
-			rmImageSaveFile "$name"
+			if [ -n "$outdir" ]; then
+				rmImageSaveFile "$name"
+			fi
 
 			# Get docker to build the image
 			printlnErr "Building $name:$timestamp from $dockerfilepath"
@@ -132,7 +154,11 @@ while IFS= read -r dockerfilepath; do
 				printlnErr "$num images detected for $name; aborting"
 				exit 1
 			fi
-			saveImage "$name" "$timestamp" "$imageId" "$dockerfilepath"
+			if [ -n "$outdir" ]; then
+				saveImage "$name" "$timestamp" "$imageId" "$dockerfilepath"
+			else
+				printf "%s\n" "Built image $imageId $name"
+			fi
 			
 		else
 			printlnErr "Image $name has already been built; remove it to build it again"
