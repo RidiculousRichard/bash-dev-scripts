@@ -1,0 +1,100 @@
+#!/bin/bash
+
+# Script to run container of a saved docker image if it is not already running
+# $1 - the saved image path
+# $2 - optional preferred container name
+# $3+ - optional arguments to pass onto docker run
+
+set -euf -o pipefail
+
+
+printlnErr() {
+	# Using printf prevents echo from mangling any unusual filename characters
+	printf "%s\n" "$*" >&2
+}
+
+showHelpAndExit() {
+	printlnErr "Correct invocation is: $(basename "$0") _saved-image-path_ [_preferred_container_name_ [_extra_docker_run_args_]...] (The image will be automatically added)"
+	exit 1
+}
+
+
+# Verify that an image path has been specified
+if [ "$#" -lt "1" ]; then
+	showHelpAndExit
+fi
+
+# Get the image path and shift them out of $@
+imagePath="$1"
+containerName=""
+if [ "$#" -gt "1" ]; then
+	containerName="$2"
+	if [ -z "$containerName" ]; then
+		showHelpAndExit
+	fi
+	shift
+fi
+shift
+	
+# Ensure that the image is loaded and get the image ID
+imageId="$(docker-ensure-image-loaded "$imagePath")"
+
+# Get the container name as the image repository if pone is not provided
+if [ -z "$containerName" ]; then
+	containerName="$(printf "%s" "$(basename "$imagePath")" | awk -F : '{print $1}')"
+fi
+
+# Check if there is a container already
+containerInfo="$(docker ps -a --format "{{.ID}}:{{.Image}}:{{.Status}}" | grep ":$imageId:" || true)"
+numExistingContainers="$(printf "%s\n" "$containerInfo" | wc -l)"
+if [ -n "$containerInfo" ] && [ "$numExistingContainers" -eq "1" ]; then
+
+	# There is already a container; examine it's status to decide what to do
+	containerStatus="$(printf "%s" "$containerInfo" | awk -F ":" '{print $3}')"
+	containerId="$(printf "%s" "$containerInfo" | awk -F ":" '{print $1}')"
+		
+	if printf "%s" "$containerStatus" | grep -iqF "paused"; then
+		# Container is paused; need to unpause it
+		docker unpause "$containerId"
+		exit 0
+
+	elif printf "%s" "$containerStatus" | grep -iqF "up"; then
+		# Container is already running; output the container ID and stop
+		printf "%s\n" "$containerId"
+		exit 0
+
+	else
+		# Remove the container so a new one can be created below
+		docker rm "$containerId" 1>/dev/null 2>/dev/null
+	fi
+elif [ "$numExistingContainers" -gt "1" ]; then
+
+	# There are multiple matching containers; does not compute
+	printlnErr "There are multiple containers in existance that use the image; unable to proceed"
+	printlnErr "$containerInfo"
+	exit 1
+fi
+
+# No container present so start one and return it's id
+docker run "$@" --name "$containerName" "$imageId" &
+
+# Wait for the container to come up
+count="0"
+while true; do
+	sleep 1
+	count="$((count+1))"
+	containerId="$(docker ps -a --format "{{.ID}}:{{.Image}}" | grep -F ":$imageId" | awk -F ":" '{print $1}' || true)"
+	if [ -n "$containerId" ]; then
+		
+		# Container has come up
+		printf "%s\n" "$containerId"
+		exit 0
+	elif [ "$count" -gt "30" ]; then
+		
+		# Container has not come up
+		printLnErr "Container does not appear to have been created"
+		exit 1
+	fi
+done
+
+

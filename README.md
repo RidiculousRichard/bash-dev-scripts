@@ -12,6 +12,7 @@ They are designed to be cloned into a subdirectory of your multi-workspace base 
     |  |  |- docker-ensure-image-loaded     (load a previously built image)
     |  |  |- dockerfiles-build              (build all docker directories passed in on stdin that have no loaded images)
     |  |  |- docker-find-dependants         (match anything against the args or stdin and return any dependants)
+    |  |  |- docker-run-image               (run a saved image by creating a container if not already present)
     |  |  |- find-latest-change-epoch-time  (identify the latest file modification time in the directory trees specified)
     |  |  |- function-git-prompt            (tweaked version of the classic git-prompt.sh; needs to be sourced in .bashrc)
     |  |  |- get-repo-base-path             (get the absolute multi-workspace path)
