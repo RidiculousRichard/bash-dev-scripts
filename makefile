@@ -1,8 +1,10 @@
-ci: clean build
+.PHONY: build rebuild clean
 
-clean:
-	./tools/clean-tools
-
-build:
+build :
 	./tools/build-tools
+
+rebuild : clean build
+
+clean :
+	./tools/clean-tools
 

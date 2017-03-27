@@ -49,16 +49,16 @@ while IFS= read -r aParent; do
 	if [ "$aContainerId" != " " ]; then
 		# A container matched so use the image ID
 		matchedContainerIds="$(printf "%s\n%s" "$matchedContainerIds" "$aContainerId")"
-	else
-		# Not a container, so look for an image and get it's full ID
-		while IFS= read -r parentImageId; do
-			if [ -z "$parentImageId" ]; then
-				continue
-			fi
-			# Add the full ID to the parentImageIds, including a space to assist matching later
-			parentImageIds="$(printf "%s%s\n" "$parentImageIds" " $parentImageId")"
-		done <<< "$(printf "%s" "$allImagesData" | grep -F "$aParent" | awk '{print $2}')"
 	fi
+
+	# Also check images
+	while IFS= read -r parentImageId; do
+		if [ -z "$parentImageId" ]; then
+			continue
+		fi
+		# Add the full ID to the parentImageIds, including a space to assist matching later
+		parentImageIds="$(printf "%s%s\n" "$parentImageIds" " $parentImageId")"
+	done <<< "$(printf "%s" "$allImagesData" | grep -F "$aParent" | awk '{print $2}')"
 done <<< "$(printf "%s\n" "$specifiedParents")"
 
 # Stop if there are no parents or containers

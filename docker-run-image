@@ -7,7 +7,6 @@
 
 set -euf -o pipefail
 
-
 printlnErr() {
 	# Using printf prevents echo from mangling any unusual filename characters
 	printf "%s\n" "$*" >&2
@@ -87,12 +86,11 @@ while true; do
 	if [ -n "$containerId" ]; then
 		
 		# Container has come up
-		printf "%s\n" "$containerId"
 		exit 0
 	elif [ "$count" -gt "30" ]; then
 		
 		# Container has not come up
-		printLnErr "Container does not appear to have been created"
+		printlnErr "Container does not appear to have been created"
 		exit 1
 	fi
 done

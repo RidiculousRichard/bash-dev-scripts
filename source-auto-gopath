@@ -5,12 +5,18 @@
 # Only a src directory wthin the $(get-repo-base-path) is used
 # If no path is provided then the current orking directory is used instead
 
+printlnErr() {
+	# Using printf prevents echo from mangling any unusual filename characters
+	printf "%s\n" "$1" >&2
+}
+
+
 # Check to see if not being sourced
 if [[ $0 == "${BASH_SOURCE-}" ]]; then
 	# Only use set when not being sourced to avoid effecting the calling environment
 	set -euf -o pipefail
-	echo "This script shoud be sourced to actually set the GOPATH" 1>&2
-	echo "Running it in a sub-shell like this means it has no effect" 1>&2
+	printlnErr "This script shoud be sourced to actually set the GOPATH"
+	printlnErr "Running it in a sub-shell like this means it has no effect"
 fi
 
 # The repo base path
@@ -26,9 +32,9 @@ else
 fi
 
 # Try and find the outer go workspace
-provisionalgopath="$(echo "$provisionalgopath/src/" | sed 's:/src/.*::')"
+provisionalgopath="$(printf "%s" "$provisionalgopath/src/" | sed 's:/src/.*::')"
 if [[ "$provisionalgopath" == "." ]]; then
-	echo "'$*' does not appear to be within a usable gopath" 1>&2
+	printlnErr "'$*' does not appear to be within a usable gopath"
 	unset repobasepath provisionalgopath
 	if [[ $0 != "${BASH_SOURCE-}" ]]; then
 		# No error code when sourced to avoid killing the shell
@@ -39,7 +45,7 @@ fi
 
 # Check that the destination directory exists and contains an src directory
 if [ ! -d "$provisionalgopath/src" ]; then
-	echo "'$provisionalgopath/src' must exist for it to be used as a go path" 1>&2
+	printlnErr "'$provisionalgopath/src' must exist for it to be used as a go path"
 	unset repobasepath provisionalgopath
 	if [[ $0 != "${BASH_SOURCE-}" ]]; then
 		# No error code when sourced to avoid killing the shell
@@ -50,7 +56,7 @@ fi
 
 # Check that the destination is inside the repos base path
 if [[ "$provisionalgopath" != "${repobasepath}/"* ]]; then
-	echo "'${provisionalgopath}' is not within '${repobasepath}'; unable to proceed" 1>&2
+	printlnErr "'${provisionalgopath}' is not within '${repobasepath}'; unable to proceed"
 	unset repobasepath provisionalgopath
 	if [[ $0 != "${BASH_SOURCE-}" ]]; then
 		# No error code when sourced to avoid killing the shell
@@ -60,9 +66,9 @@ if [[ "$provisionalgopath" != "${repobasepath}/"* ]]; then
 fi
 
 if [[ $0 == "${BASH_SOURCE-}" ]]; then
-	echo "GOPATH would have been set to $provisionalgopath" 1>&2
+	printlnErr "GOPATH would have been set to $provisionalgopath"
 else
 	export GOPATH="$provisionalgopath"
-	echo "GOPATH is now $provisionalgopath" 1>&2
+	printlnErr "GOPATH is now $provisionalgopath"
 fi
 unset repobasepath provisionalgopath
