@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Script to set the correct username and email address for use with github in the current repository
-# It requires the following evironment variables ot be set
+# It requires the following evironment variables to be set
 #    GITHUB_USERNAME
 #    GITHUB_EMAIL
 #    PATH contains the scripts directory
